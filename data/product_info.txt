@@ -1,0 +1,52 @@
+Home Loan A: Interest rate 5.0%, Fixed for 2 years, Max Loan Amount $500,000
+Home Loan B: Interest rate 3.75%, 30 years term, No prepayment penalty
+Home Loan C: Interest rate 4.5%, Fixed for 5 years, Max Loan Amount $600,000
+Home Loan D: Interest rate 3.8%, 15 years term, 20% Down payment
+Home Loan E: Interest rate 4.25%, 20 years term, Max Loan Amount $400,000
+Home Loan F: Interest rate 3.0%, Fixed for 3 years, 5% Down payment
+Home Loan G: Interest rate 4.0%, 25 years term, Max Loan Amount $700,000
+Home Loan H: Interest rate 3.95%, Fixed for 7 years, Low credit score accepted
+Home Loan I: Interest rate 5.25%, 10 years term, Max Loan Amount $300,000
+Home Loan J: Interest rate 2.85%, Fixed for 4 years, No prepayment penalty
+Home Loan K: Interest rate 4.75%, 30 years term, 10% Down payment
+Home Loan L: Interest rate 3.1%, Fixed for 1 year, No origination fee
+Home Loan M: Interest rate 4.6%, 25 years term, Max Loan Amount $650,000
+Home Loan N: Interest rate 5.15%, 15 years term, 30% Down payment
+Home Loan O: Interest rate 3.3%, Fixed for 2 years, No closing costs
+Home Loan P: Interest rate 4.85%, 30 years term, Max Loan Amount $750,000
+Home Loan Q: Interest rate 3.5%, Fixed for 6 years, No prepayment penalty
+Home Loan R: Interest rate 5.4%, 15 years term, 25% Down payment
+Home Loan S: Interest rate 4.25%, 20 years term, Max Loan Amount $800,000
+Home Loan T: Interest rate 3.7%, Fixed for 5 years, Low down payment
+Home Loan U: Interest rate 5.1%, 30 years term, High credit score required
+Home Loan V: Interest rate 4.3%, Fixed for 7 years, Max Loan Amount $550,000
+Home Loan W: Interest rate 4.0%, 25 years term, First-time homebuyer program
+Home Loan X: Interest rate 3.6%, Fixed for 3 years, No PMI
+Home Loan Y: Interest rate 5.0%, 20 years term, 5% Down payment
+Home Loan Z: Interest rate 3.75%, Fixed for 1 year, No penalty for early payoff
+Home Loan AA: Interest rate 4.2%, 15 years term, Max Loan Amount $400,000
+Home Loan AB: Interest rate 3.4%, Fixed for 10 years, No processing fee
+Home Loan AC: Interest rate 4.5%, 30 years term, Max Loan Amount $500,000
+Home Loan AD: Interest rate 4.9%, 20 years term, No credit check required
+Home Loan AE: Interest rate 3.25%, Fixed for 4 years, 10% Down payment
+Home Loan AF: Interest rate 5.3%, 25 years term, No upfront fees
+Home Loan AG: Interest rate 3.95%, Fixed for 7 years, Max Loan Amount $600,000
+Home Loan AH: Interest rate 4.0%, 30 years term, No closing fees
+Home Loan AI: Interest rate 3.85%, Fixed for 3 years, 3% Down payment
+Home Loan AJ: Interest rate 4.25%, 15 years term, Low interest rate for veterans
+Home Loan AK: Interest rate 5.0%, 20 years term, Max Loan Amount $450,000
+Home Loan AL: Interest rate 3.5%, Fixed for 5 years, No penalty for early payoff
+Home Loan AM: Interest rate 4.3%, 30 years term, Max Loan Amount $550,000
+Home Loan AN: Interest rate 3.1%, Fixed for 6 years, First-time homebuyer discount
+Home Loan AO: Interest rate 5.4%, 10 years term, High-income earners eligible
+Home Loan AP: Interest rate 3.95%, Fixed for 2 years, Max Loan Amount $650,000
+Home Loan AQ: Interest rate 4.75%, 20 years term, Quick processing time
+Home Loan AR: Interest rate 3.6%, Fixed for 4 years, 15% Down payment
+Home Loan AS: Interest rate 4.25%, 15 years term, Max Loan Amount $700,000
+Home Loan AT: Interest rate 3.2%, Fixed for 5 years, No credit report fees
+Home Loan AU: Interest rate 4.5%, 30 years term, Max Loan Amount $800,000
+Home Loan AV: Interest rate 3.7%, Fixed for 6 years, Low monthly payments
+Home Loan AW: Interest rate 5.0%, 20 years term, No early repayment fee
+Home Loan AX: Interest rate 4.1%, Fixed for 3 years, Max Loan Amount $500,000
+Home Loan AY: Interest rate 5.2%, 15 years term, No processing fees
+Home Loan AZ: Interest rate 3.8%, Fixed for 7 years, High Loan-to-Value ratio

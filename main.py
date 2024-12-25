@@ -10,7 +10,13 @@ from fastapi.websockets import WebSocketDisconnect
 from twilio.twiml.voice_response import VoiceResponse, Connect, Say, Stream
 from twilio.rest import Client
 
+from database import get_product_info_from_pinecone
+
 from dotenv import load_dotenv
+import logging
+import sqlite3
+import time
+
 load_dotenv()
 
 # Configuration
@@ -22,19 +28,26 @@ TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
 
 
 SYSTEM_MESSAGE = (
-    "You are a helpful and bubbly AI assistant who loves to chat about "
-    "anything the user is interested in and is prepared to offer them facts. "
-    "You have a penchant for dad jokes, owl jokes, and rickrolling – subtly. "
-    "Always stay positive, but work in a joke when appropriate."
+    "You are a helpful and bubbly AI assistant who assists users in gathering information for home loans. "
+    "You will ask the user about their interest in a home loan, the time period they need the loan for, "
+    "the location of the home, and any other home loan details. "
+    "Always stay positive, do not go outside loan assistancehip while talking with customer."
 )
 VOICE = 'alloy'
 LOG_EVENT_TYPES = [
-    'error', 'response.content.done', 'rate_limits.updated',
-    'response.done', 'input_audio_buffer.committed',
-    'input_audio_buffer.speech_stopped', 'input_audio_buffer.speech_started',
-    'session.created'
+    'response.content.done',
+    'rate_limits.updated',
+    'response.done',
+    'input_audio_buffer.committed',
+    'input_audio_buffer.speech_stopped',
+    'input_audio_buffer.speech_started',
+    'session.created',
+    'response.text.done',
+    'conversation.item.input_audio_transcription.completed'
 ]
 SHOW_TIMING_MATH = False
+MAKE_WEBHOOK_URL = os.getenv('MAKE_WEBHOOK_URL')
+sessions = {}
 
 app = FastAPI()
 
@@ -61,12 +74,19 @@ async def index_page():
 #     response.append(connect)
 #     return HTMLResponse(content=str(response), media_type="application/xml")
 
+# @app.get("/query-pinecone", response_class=JSONResponse)
+@app.api_route("/query-pinecone", methods=["GET", "POST"], response_class=JSONResponse)
+async def query_pinecone(query: str):
+    """Endpoint to query Pinecone and return results."""
+    results = get_product_info_from_pinecone(query)
+    return {"results": results}
+
 # @app.post("/make-call")
 @app.api_route("/make-call", methods=["GET", "POST"])
-async def make_outgoing_call(to: str):
+async def make_outgoing_call(to: str, name: str):
     """Initiate an outgoing call and connect it to the AI assistant."""
-    if not to:
-        raise HTTPException(status_code=400, detail="The 'to' phone number is required.")
+    if not to or not name:
+        raise HTTPException(status_code=400, detail="The 'to' phone number and 'name' are required.")
 
     # Generate TwiML for the call
     twiml_url = f"{os.getenv('HOSTNAME')}/twiml"
@@ -77,6 +97,7 @@ async def make_outgoing_call(to: str):
             from_=TWILIO_PHONE_NUMBER,
             url=twiml_url
         )
+        sessions[call.sid] = {"name": name, "contact_number": to, "transcript": '', "streamSid": None}
         return {"message": "Call initiated successfully", "call_sid": call.sid}
 
     except Exception as e:
@@ -89,7 +110,7 @@ async def twiml_response():
     """Generate TwiML response for the outgoing call."""
     response = VoiceResponse()
     response.say(
-        "Hello! You are now connected to an AI voice assistant powered by Twilio and OpenAI.",
+        "Hello! You are now connected to an AI voice assistant for Home Loan queries.",
         voice="alice"
     )
     response.pause(length=1)
@@ -109,6 +130,10 @@ async def handle_media_stream(websocket: WebSocket):
     print("Client connected")
     await websocket.accept()
 
+    session_id = websocket.headers.get('x-twilio-call-sid', f'session_{int(time.time())}')
+    session = sessions.get(session_id, {"transcript": '', "streamSid": None})
+    sessions[session_id] = session
+
     async with websockets.connect(
         'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01',
         extra_headers={
@@ -125,6 +150,36 @@ async def handle_media_stream(websocket: WebSocket):
         mark_queue = []
         response_start_timestamp_twilio = None
         
+        # # @openai_ws.on('message')
+        # @websocket.on_event("message")
+        # async def on_openai_message(data):
+        #     try:
+        #         response = json.loads(data)
+
+        #         if response['type'] == 'response.audio.delta' and response.get('delta'):
+        #             await websocket.send_json({
+        #                 "event": "media",
+        #                 "streamSid": stream_sid,
+        #                 "media": {"payload": response['delta']}
+        #             })
+
+        #         if response['type'] == 'response.done':
+        #             agent_message = response['response']['output'][0].get('content', [{}])[0].get('transcript', 'Agent message not found')
+        #             session['transcript'] += f'Agent: {agent_message}\n'
+        #             logging.info('Agent (%s): %s', session_id, agent_message)
+
+        #         if response['type'] == 'conversation.item.input_audio_transcription.completed' and response.get('transcript'):
+        #             user_message = response['transcript'].strip()
+        #             session['transcript'] += f'User: {user_message}\n'
+        #             logging.info('User (%s): %s', session_id, user_message)
+
+        #         if response['type'] in LOG_EVENT_TYPES:
+        #             logging.info('Received event: %s', response)
+
+        #     except Exception as e:
+        #         logging.error('Error processing OpenAI message: %s, Raw message: %s', str(e), data)
+
+
         async def receive_from_twilio():
             """Receive audio data from Twilio and send it to the OpenAI Realtime API."""
             nonlocal stream_sid, latest_media_timestamp
@@ -151,6 +206,7 @@ async def handle_media_stream(websocket: WebSocket):
                 print("Client disconnected.")
                 if openai_ws.open:
                     await openai_ws.close()
+                await on_close(session_id, session, openai_ws)
 
         async def send_to_twilio():
             """Receive events from the OpenAI Realtime API, send audio back to Twilio."""
@@ -179,9 +235,18 @@ async def handle_media_stream(websocket: WebSocket):
 
                         # Update last_assistant_item safely
                         if response.get('item_id'):
-                            last_assistant_item = response['item_id']
+                            # last_assistant_item = response['item_id']
+                            last_assistant_item = response.get('item_id')
 
                         await send_mark(websocket, stream_sid)
+
+                    # Handle customer query
+                    if response.get('type') == 'conversation.item.input_audio_transcription.completed' and response.get('transcript'):
+                        user_message = response['transcript'].strip()
+                        query = user_message.lower().replace("query", "").strip()
+                        pinecone_results = get_product_info_from_pinecone(query)
+                        response_text = "Here are the results from Pinecone: " + ", ".join([result['metadata']['product_info'] for result in pinecone_results])
+                        await send_response_to_twilio(response_text)
 
                     # Trigger an interruption. Your use case might work better using `input_audio_buffer.speech_stopped`, or combining the two.
                     if response.get('type') == 'input_audio_buffer.speech_started':
@@ -191,7 +256,26 @@ async def handle_media_stream(websocket: WebSocket):
                             await handle_speech_started_event()
             except Exception as e:
                 print(f"Error in send_to_twilio: {e}")
+                await on_close(session_id, session, openai_ws)
 
+        async def send_response_to_twilio(response_text):
+            """Send a text response to Twilio."""
+            response_item = {
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": response_text
+                        }
+                    ]
+                }
+            }
+            await openai_ws.send(json.dumps(response_item))
+            await openai_ws.send(json.dumps({"type": "response.create"}))        
+        
         async def handle_speech_started_event():
             """Handle interruption when the caller's speech starts."""
             nonlocal response_start_timestamp_twilio, last_assistant_item
@@ -234,6 +318,70 @@ async def handle_media_stream(websocket: WebSocket):
 
         await asyncio.gather(receive_from_twilio(), send_to_twilio())
 
+        # @websocket.on('close')
+        @websocket.on_event("close")
+        async def on_close(session_id, session, openai_ws):
+            logging.info('on_close called with session_id: %s', session_id)
+            if openai_ws.ready_state == openai_ws.OPEN:
+                await openai_ws.close()
+            logging.info('Client disconnected (%s).', session_id)
+            logging.info('Full Transcript:')
+            logging.info(session['transcript'])
+
+            logging.info('Final Caller Number: %s', session['contact_number'])
+
+            # Extract required information from the transcript
+            # This is a placeholder. You need to implement the actual extraction logic.
+            interested_in_home_loan = "Yes"
+            time_period_of_loan = "15 years"
+            location_of_home = "New Delhi"
+            any_other_home_loan = "No"
+
+            logging.info("Storing data in database")
+            await store_in_database({
+                "name": session['name'],
+                "contact_number": session['contact_number'],
+                "interested_in_home_loan": interested_in_home_loan,
+                "time_period_of_loan": time_period_of_loan,
+                "location_of_home": location_of_home,
+                "any_other_home_loan": any_other_home_loan,
+                # "transcript": session['transcript']
+            })
+
+            del sessions[session_id]
+
+        @openai_ws.on('error')
+        # @websocket.on_event("error")
+        async def on_error(error):
+            logging.error('Error in the OpenAI WebSocket: %s', str(error))
+            await on_close(session_id, session, openai_ws)
+
+        async def send_error_response():
+            await openai_ws.send_json({
+                "type": "response.create",
+                "response": {
+                    "modalities": ["text", "audio"],
+                    "instructions": "I apologize, but I'm having trouble processing your request right now. Is there anything else I can help you with?",
+                }
+            })
+
+logging.basicConfig(level=logging.INFO)
+async def store_in_database(data):
+    logging.info("Inserting data into database: %s", data)
+    conn = sqlite3.connect('callbot.db', check_same_thread=False)
+    try:
+        c = conn.cursor()
+        c.execute('''
+            INSERT INTO call_details (name, contact_number, interested_in_home_loan, time_period_of_loan, location_of_home, any_other_home_loan, transcript)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (data['name'], data['contact_number'], data['interested_in_home_loan'], data['time_period_of_loan'], data['location_of_home'], data['any_other_home_loan'], data['transcript']))
+        conn.commit()
+        logging.info("Data inserted into call_details table: %s", data)
+    except Exception as e:
+        logging.error("Error inserting data into database: %s", str(e))
+    finally:
+        conn.close()
+
 async def send_initial_conversation_item(openai_ws):
     """Send initial conversation item if AI talks first."""
     initial_conversation_item = {
@@ -244,7 +392,7 @@ async def send_initial_conversation_item(openai_ws):
             "content": [
                 {
                     "type": "input_text",
-                    "text": "Greet the user with 'Hello there! I am an AI voice assistant powered by Twilio and the OpenAI Realtime API. You can ask me for facts, jokes, or anything you can imagine. How can I help you?'"
+                    "text": "Hello there! I am an AI voice assistant powered by Twilio and the OpenAI Realtime API. I will ask you a few questions to assist our loan officer. Are you interested in a home loan?"
                 }
             ]
         }
@@ -271,7 +419,7 @@ async def initialize_session(openai_ws):
     await openai_ws.send(json.dumps(session_update))
 
     # Uncomment the next line to have the AI speak first
-    # await send_initial_conversation_item(openai_ws)
+    await send_initial_conversation_item(openai_ws)
 
 if __name__ == "__main__":
     import uvicorn
