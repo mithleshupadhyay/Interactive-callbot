@@ -28,10 +28,10 @@ TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
 
 
 SYSTEM_MESSAGE = (
-    "You are a helpful and bubbly AI assistant who assists users in gathering information for home loans. "
-    "You will ask the user about their interest in a home loan, the time period they need the loan for, "
-    "the location of the home, and any other home loan details. "
-    "Always stay positive, do not go outside loan assistancehip while talking with customer."
+    "You are an AI assistant specialized in home loan products. "
+    "You will provide accurate and concise answers based on the data stored in Pinecone. "
+    "You will ask the caller a few questions to assist the loan officer. "
+    "Always stay positive and do not go outside loan assistance while talking with the customer."
 )
 VOICE = 'alloy'
 LOG_EVENT_TYPES = [
@@ -240,13 +240,54 @@ async def handle_media_stream(websocket: WebSocket):
 
                         await send_mark(websocket, stream_sid)
 
+                    # # Handle customer query
+                    # if response.get('type') == 'conversation.item.input_audio_transcription.completed' and response.get('transcript'):
+                    #     user_message = response['transcript'].strip()
+                    #     query = user_message.lower().replace("query", "").strip()
+                    #     pinecone_results = get_product_info_from_pinecone(query)
+                    #     response_text = "Here are the results from Pinecone: " + ", ".join([result['metadata']['product_info'] for result in pinecone_results])
+                    #     print(f"User query: {user_message}, Pinecone results: {response_text}")
+                    #     await send_response_to_twilio(response_text)
+
+
                     # Handle customer query
                     if response.get('type') == 'conversation.item.input_audio_transcription.completed' and response.get('transcript'):
                         user_message = response['transcript'].strip()
+                        print(f"User Message: {user_message}")
+                        logging.info(f"User Message: {user_message}")
+
+                        # Add user message to the transcript
+                        session['transcript'] += f"\nUser: {user_message}"
+                        print(f"Updated Transcript: {session['transcript']}")
+                        logging.info(f"Updated Transcript: {session['transcript']}")
+
                         query = user_message.lower().replace("query", "").strip()
-                        pinecone_results = get_product_info_from_pinecone(query)
-                        response_text = "Here are the results from Pinecone: " + ", ".join([result['metadata']['product_info'] for result in pinecone_results])
-                        await send_response_to_twilio(response_text)
+                        logging.info(f"Query: {query}")
+
+                        try:
+                            pinecone_results = get_product_info_from_pinecone(query)
+                            logging.info(f"Pinecone Results: {pinecone_results}")
+
+                            if pinecone_results:
+                                response_text = "Here are the results from Pinecone: " + ", ".join([result['metadata']['product_info'] for result in pinecone_results])
+                            else:
+                                response_text = "No results found in Pinecone for your query."
+
+                            print(f"Pinecone Query Results for '{query}': {response_text}")
+                            logging.info(f"Pinecone Query Results for '{query}': {response_text}")
+
+                            await send_response_to_twilio(response_text)
+                        except Exception as e:
+                            logging.error(f"Error querying Pinecone: {e}")
+                            await send_response_to_twilio("Sorry, there was an error processing your request.")
+
+                    # Log user speech
+                    if response.get('type') == 'input_audio_buffer.speech_stopped' and response.get('transcript'):
+                        user_transcript = response['transcript'].strip()
+                        print(f"User Transcript: {user_transcript}")
+                        session['transcript'] += f"\nUser: {user_transcript}"
+                        print(f"Updated Transcript: {session['transcript']}")
+                        logging.info(f"Updated Transcript: {session['transcript']}")
 
                     # Trigger an interruption. Your use case might work better using `input_audio_buffer.speech_stopped`, or combining the two.
                     if response.get('type') == 'input_audio_buffer.speech_started':

@@ -47,7 +47,9 @@ def generate_embeddings(texts):
                 model="text-embedding-ada-002",  
                 input=text
             )
-            embeddings.append(response.data[0].embedding)  
+            embedding = response.data[0].embedding
+            print(f"Generated Embedding: {embedding[:5]}...")  # Print first 5 values for validation
+            embeddings.append(embedding)
         return embeddings
     except Exception as e:
         print(f"Error generating embeddings: {e}")
@@ -89,21 +91,66 @@ def upsert_product_info_to_pinecone():
         print(f"Error while upserting into Pinecone: {e}")
 
 # Function to retrieve product info embeddings from Pinecone
-def get_product_info_from_pinecone(query="loan product details"):
-    """Function to retrieve product info from Pinecone."""
+def get_product_info_from_pinecone(query="loan product details", top_k=5):
+    """Query the existing Pinecone index."""
     try:
-        index = pc.Index(index_name)  
-        # result = index.query(query, top_k=5, namespace="product_info")  
-        response = openai.Embedding.create(
-            model="text-embedding-ada-002",
-            input=query
+        # Generate query embedding
+        query_embedding = generate_embeddings([query])  # Note: Expecting a list input
+        if not query_embedding or not isinstance(query_embedding[0], list):
+            print("Failed to generate query embedding or invalid embedding format.")
+            return None
+
+        # Connect to Pinecone index
+        index = pc.Index(index_name)
+
+        # Query the Pinecone index
+        # results = index.query(queries=[query_embedding[0]], top_k=top_k, namespace="product_info")
+        results = index.query(
+            namespace="product_info",
+            # vector=[0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3],
+            vector=query_embedding,
+            top_k=top_k,
+            # include_values=True
+            include_metadata=True
         )
-        query_embedding = response.data[0].embedding
-        result = index.query(queries=[query_embedding], top_k=5, namespace="product_info")
-        return result['matches']  
+
+        # Process and return the results
+        return [
+            {
+                "id": match["id"],
+                "score": match["score"],
+                "metadata": match.get("metadata")
+            }
+            for match in results["matches"]
+        ]
     except Exception as e:
-        print(f"Error while querying Pinecone: {e}")
-        return []
+        print(f"Error querying Pinecone: {e}")
+        return None
+
+# def get_product_info_from_pinecone(query="loan product details"):
+#     """Function to retrieve product info from Pinecone."""
+#     # try:
+#     #     index = pc.Index(index_name)  
+#     #     # result = index.query(query, top_k=5, namespace="product_info")  
+#     #     response = openai.Embedding.create(
+#     #         model="text-embedding-ada-002",
+#     #         input=query
+#     #     )
+#     #     query_embedding = response.data[0].embedding
+#     #     result = index.query(queries=[query_embedding], top_k=5, namespace="product_info")
+#     #     return result['matches']  
+#     try:
+#         # Generate embedding for the query
+#         query_embedding = generate_embeddings([query])[0]
+#         # Connect to the index
+#         index = pc.Index(index_name)
+#         # Query the index
+#         results = index.query(queries=[query_embedding], top_k=5)
+#         return results["matches"]
+    
+#     except Exception as e:
+#         print(f"Error while querying Pinecone: {e}")
+#         return []
 
 # If you want to run the upsert_product_info_to_pinecone function, you can call it here
 # upsert_product_info_to_pinecone()  # Uncomment to run the upsert when required
